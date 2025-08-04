@@ -337,7 +337,7 @@ class GmailClient:
                 })
             
             # Execute the operation with token refresh handling
-            return self._handle_token_refresh(_operation)
+            return _operation()
             
         except HttpError as e:
             logger.error(f"API Exception: {str(e)}")
