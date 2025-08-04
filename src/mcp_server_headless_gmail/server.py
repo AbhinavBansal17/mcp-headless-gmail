@@ -497,7 +497,7 @@ async def main():
                         "max_results": {"type": "integer", "description": "Maximum number of emails to return (default: 10)"},
                         "unread_only": {"type": "boolean", "description": "Whether to return only unread emails (default: False)"}
                     },
-                    "required": ["google_access_token"]
+                    "required": []
                 },
             ),
             types.Tool(
@@ -511,7 +511,7 @@ async def main():
                         "thread_id": {"type": "string", "description": "ID of the thread to retrieve (will get the first message if multiple exist)"},
                         "offset": {"type": "integer", "description": "Offset in characters to start from (default: 0)"}
                     },
-                    "required": ["google_access_token"]
+                    "required": []
                 },
             ),
             types.Tool(
@@ -526,7 +526,7 @@ async def main():
                         "body": {"type": "string", "description": "Email body content (plain text)"},
                         "html_body": {"type": "string", "description": "Email body content in HTML format (optional)"}
                     },
-                    "required": ["google_access_token", "to", "subject", "body"]
+                    "required": ["to", "subject", "body"]
                 },
             ),
         ]
