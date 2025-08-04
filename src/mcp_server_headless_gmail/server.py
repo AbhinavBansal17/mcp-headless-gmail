@@ -75,53 +75,6 @@ class GmailClient:
                 "details": str(e)
             })
 
-    def refresh_token(self, client_id: str, client_secret: str) -> str:
-        """Refresh the access token using the refresh token
-        
-        Args:
-            client_id: Google OAuth2 client ID
-            client_secret: Google OAuth2 client secret
-        """
-        if not self.credentials.refresh_token:
-            return json.dumps({
-                "error": "No refresh token provided",
-                "status": "error"
-            })
-            
-        try:
-            # Set client_id and client_secret for refresh
-            self.credentials._client_id = client_id
-            self.credentials._client_secret = client_secret
-            
-            # Force refresh
-            request = Request()
-            self.credentials.refresh(request)
-            
-            # Get token expiration time
-            expiry = self.credentials.expiry
-            
-            # Return the new access token and its expiration
-            return json.dumps({
-                "access_token": self.credentials.token,
-                "expires_at": expiry.isoformat() if expiry else None,
-                "expires_in": int((expiry - datetime.now(expiry.tzinfo)).total_seconds()) if expiry else None,
-                "status": "success"
-            })
-            
-        except google.auth.exceptions.RefreshError as e:
-            logger.error(f"Token refresh error: {str(e)}")
-            return json.dumps({
-                "error": "Token refresh failed. Please provide valid client ID and client secret.",
-                "details": str(e),
-                "status": "error"
-            })
-        except Exception as e:
-            logger.error(f"Exception: {str(e)}")
-            return json.dumps({
-                "error": str(e),
-                "status": "error"
-            })
-
     def extract_plain_text_body(self, msg_payload):
         """Extract plain text body from message payload
         
@@ -474,20 +427,6 @@ async def main():
         """List available tools"""
         return [
             types.Tool(
-                name="gmail_refresh_token",
-                description="Refresh the access token using the refresh token and client credentials",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "google_access_token": {"type": "string", "description": "Google OAuth2 access token (optional if expired)"},
-                        "google_refresh_token": {"type": "string", "description": "Google OAuth2 refresh token"},
-                        "google_client_id": {"type": "string", "description": "Google OAuth2 client ID for token refresh"},
-                        "google_client_secret": {"type": "string", "description": "Google OAuth2 client secret for token refresh"}
-                    },
-                    "required": ["google_refresh_token", "google_client_id", "google_client_secret"]
-                },
-            ),
-            types.Tool(
                 name="gmail_get_recent_emails",
                 description="Get the most recent emails from Gmail (returns metadata, snippets, and first 1k chars of body)",
                 inputSchema={
@@ -540,90 +479,66 @@ async def main():
             if not arguments:
                 raise ValueError(f"Missing arguments for {name}")
             
-            if name == "gmail_refresh_token":
-                # For refresh token, we need refresh token, client ID and secret
-                refresh_token = arguments.get("google_refresh_token")
-                client_id = arguments.get("google_client_id")
-                client_secret = arguments.get("google_client_secret")
-                access_token = arguments.get("google_access_token")  # Optional for refresh
+            # For all other tools, we only need access token
+            access_token = arguments.get("google_access_token")
+            
+            if not access_token:
+                raise ValueError("google_access_token is required")
+            
+            if name == "gmail_get_recent_emails":
+                # Initialize Gmail client with just access token
+                logger.debug(f"Initializing Gmail client for get_recent_emails with access token: {access_token[:10]}...")
+                try:
+                    gmail = GmailClient(
+                        access_token=access_token
+                    )
+                    logger.debug("Gmail client initialized successfully")
+                    
+                    max_results = int(arguments.get("max_results", 10))
+                    unread_only = bool(arguments.get("unread_only", False))
+                    logger.debug(f"Calling get_recent_emails with max_results={max_results} and unread_only={unread_only}")
+                    results = gmail.get_recent_emails(max_results=max_results, unread_only=unread_only)
+                    logger.debug(f"get_recent_emails result (first 200 chars): {results[:200]}...")
+                    return [types.TextContent(type="text", text=results)]
+                except Exception as e:
+                    logger.error(f"Exception in gmail_get_recent_emails handler: {str(e)}", exc_info=True)
+                    return [types.TextContent(type="text", text=f"Error: {str(e)}")]
                 
-                if not refresh_token:
-                    raise ValueError("google_refresh_token is required for token refresh")
-                
-                if not client_id or not client_secret:
-                    raise ValueError("Both google_client_id and google_client_secret are required for token refresh")
-                
-                # Initialize Gmail client for token refresh
+            elif name == "gmail_get_email_body_chunk":
+                # Initialize Gmail client with just access token
                 gmail = GmailClient(
-                    access_token=access_token, 
-                    refresh_token=refresh_token
+                    access_token=access_token
                 )
                 
-                # Call the refresh_token method
-                results = gmail.refresh_token(client_id=client_id, client_secret=client_secret)
+                message_id = arguments.get("message_id")
+                thread_id = arguments.get("thread_id")
+                offset = int(arguments.get("offset", 0))
+                
+                if not message_id and not thread_id:
+                    raise ValueError("Either message_id or thread_id must be provided")
+                
+                results = gmail.get_email_body_chunk(message_id=message_id, thread_id=thread_id, offset=offset)
                 return [types.TextContent(type="text", text=results)]
-            
-            else:
-                # For all other tools, we only need access token
-                access_token = arguments.get("google_access_token")
                 
-                if not access_token:
-                    raise ValueError("google_access_token is required")
+            elif name == "gmail_send_email":
+                # Initialize Gmail client with just access token
+                gmail = GmailClient(
+                    access_token=access_token
+                )
                 
-                if name == "gmail_get_recent_emails":
-                    # Initialize Gmail client with just access token
-                    logger.debug(f"Initializing Gmail client for get_recent_emails with access token: {access_token[:10]}...")
-                    try:
-                        gmail = GmailClient(
-                            access_token=access_token
-                        )
-                        logger.debug("Gmail client initialized successfully")
-                        
-                        max_results = int(arguments.get("max_results", 10))
-                        unread_only = bool(arguments.get("unread_only", False))
-                        logger.debug(f"Calling get_recent_emails with max_results={max_results} and unread_only={unread_only}")
-                        results = gmail.get_recent_emails(max_results=max_results, unread_only=unread_only)
-                        logger.debug(f"get_recent_emails result (first 200 chars): {results[:200]}...")
-                        return [types.TextContent(type="text", text=results)]
-                    except Exception as e:
-                        logger.error(f"Exception in gmail_get_recent_emails handler: {str(e)}", exc_info=True)
-                        return [types.TextContent(type="text", text=f"Error: {str(e)}")]
-                    
-                elif name == "gmail_get_email_body_chunk":
-                    # Initialize Gmail client with just access token
-                    gmail = GmailClient(
-                        access_token=access_token
-                    )
-                    
-                    message_id = arguments.get("message_id")
-                    thread_id = arguments.get("thread_id")
-                    offset = int(arguments.get("offset", 0))
-                    
-                    if not message_id and not thread_id:
-                        raise ValueError("Either message_id or thread_id must be provided")
-                    
-                    results = gmail.get_email_body_chunk(message_id=message_id, thread_id=thread_id, offset=offset)
-                    return [types.TextContent(type="text", text=results)]
-                    
-                elif name == "gmail_send_email":
-                    # Initialize Gmail client with just access token
-                    gmail = GmailClient(
-                        access_token=access_token
-                    )
-                    
-                    to = arguments.get("to")
-                    subject = arguments.get("subject")
-                    body = arguments.get("body")
-                    html_body = arguments.get("html_body")
-                    
-                    if not to or not subject or not body:
-                        raise ValueError("Missing required parameters: to, subject, and body are required")
-                    
-                    results = gmail.send_email(to=to, subject=subject, body=body, html_body=html_body)
-                    return [types.TextContent(type="text", text=results)]
+                to = arguments.get("to")
+                subject = arguments.get("subject")
+                body = arguments.get("body")
+                html_body = arguments.get("html_body")
+                
+                if not to or not subject or not body:
+                    raise ValueError("Missing required parameters: to, subject, and body are required")
+                
+                results = gmail.send_email(to=to, subject=subject, body=body, html_body=html_body)
+                return [types.TextContent(type="text", text=results)]
 
-                else:
-                    raise ValueError(f"Unknown tool: {name}")
+            else:
+                raise ValueError(f"Unknown tool: {name}")
 
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error: {str(e)}")]
