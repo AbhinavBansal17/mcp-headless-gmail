@@ -33,6 +33,15 @@ A MCP (Model Context Protocol) server that provides get, send Gmails without loc
 
 ## Installation
 
+### Installing via Smithery
+
+To install mcp-headless-gmail for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@AbhinavBansal17/mcp-headless-gmail):
+
+```bash
+npx -y @smithery/cli install @AbhinavBansal17/mcp-headless-gmail --client claude
+```
+
+### Manual Installation
 ```bash
 # Clone the repository
 git clone https://github.com/baryhuang/mcp-headless-gmail.git
