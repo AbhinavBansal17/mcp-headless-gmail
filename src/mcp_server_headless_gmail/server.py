@@ -240,7 +240,8 @@ class GmailClient:
             logger.error(f"Exception in get_recent_emails: {str(e)}", exc_info=True)
             return json.dumps({"error": str(e)})
 
-    def send_email(self, to: str, subject: str, body: str, html_body: Optional[str] = None) -> str:
+    def send_email(self, to: str, subject: str, body: str, html_body: Optional[str] = None, 
+                   attachments: Optional[List[Dict[str, str]]] = None) -> str:
         """Send an email via Gmail
         
         Args:
@@ -248,6 +249,10 @@ class GmailClient:
             subject: Email subject
             body: Plain text email body
             html_body: Optional HTML email body
+            attachments: Optional list of attachment dictionaries with keys:
+                        - 'filename': Name of the file
+                        - 'data': Base64 URL encoded file data
+                        - 'mime_type': MIME type of the file (optional, will be inferred if not provided)
         """
         try:
             # Check if service is initialized
@@ -259,15 +264,64 @@ class GmailClient:
                 
             # Define the operation
             def _operation():
-                # Create message container
-                message = MIMEMultipart('alternative')
+                # Create message container - use 'mixed' if we have attachments, 'alternative' otherwise
+                if attachments:
+                    message = MIMEMultipart('mixed')
+                else:
+                    message = MIMEMultipart('alternative')
+                
                 message['to'] = to
                 message['subject'] = subject
                 
-                # Attach plain text and HTML parts
-                message.attach(MIMEText(body, 'plain'))
-                if html_body:
-                    message.attach(MIMEText(html_body, 'html'))
+                # Create the text/html part container
+                if attachments:
+                    text_part = MIMEMultipart('alternative')
+                    message.attach(text_part)
+                    text_part.attach(MIMEText(body, 'plain'))
+                    if html_body:
+                        text_part.attach(MIMEText(html_body, 'html'))
+                else:
+                    # Attach plain text and HTML parts directly
+                    message.attach(MIMEText(body, 'plain'))
+                    if html_body:
+                        message.attach(MIMEText(html_body, 'html'))
+                
+                # Add attachments if provided
+                if attachments:
+                    for attachment in attachments:
+                        try:
+                            filename = attachment.get('filename', 'attachment')
+                            file_data = attachment.get('data', '')
+                            mime_type = attachment.get('mime_type')
+                            
+                            if not file_data:
+                                logger.warning(f"Skipping attachment {filename}: no data provided")
+                                continue
+                            
+                            # Decode base64 URL encoded data
+                            try:
+                                decoded_data = base64.urlsafe_b64decode(file_data)
+                            except Exception as e:
+                                logger.error(f"Failed to decode base64 data for {filename}: {str(e)}")
+                                continue
+                            
+                            # Determine MIME type if not provided
+                            if not mime_type:
+                                import mimetypes
+                                mime_type, _ = mimetypes.guess_type(filename)
+                                if not mime_type:
+                                    mime_type = 'application/octet-stream'
+                            
+                            # Create attachment
+                            attachment_part = MIMEApplication(decoded_data, _subtype=mime_type.split('/')[-1])
+                            attachment_part.add_header('Content-Disposition', 'attachment', filename=filename)
+                            message.attach(attachment_part)
+                            
+                            logger.debug(f"Successfully attached {filename} ({len(decoded_data)} bytes)")
+                            
+                        except Exception as e:
+                            logger.error(f"Error processing attachment {filename}: {str(e)}")
+                            continue
                 
                 # Encode the message
                 encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
@@ -455,7 +509,7 @@ async def main():
             ),
             types.Tool(
                 name="gmail_send_email",
-                description="Send an email via Gmail",
+                description="Send an email via Gmail with optional file attachments",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -463,7 +517,20 @@ async def main():
                         "to": {"type": "string", "description": "Recipient email address"},
                         "subject": {"type": "string", "description": "Email subject"},
                         "body": {"type": "string", "description": "Email body content (plain text)"},
-                        "html_body": {"type": "string", "description": "Email body content in HTML format (optional)"}
+                        "html_body": {"type": "string", "description": "Email body content in HTML format (optional)"},
+                        "attachments": {
+                            "type": "array",
+                            "description": "Optional list of file attachments",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "filename": {"type": "string", "description": "Name of the file"},
+                                    "data": {"type": "string", "description": "Base64 URL encoded file data"},
+                                    "mime_type": {"type": "string", "description": "MIME type of the file (optional, will be inferred if not provided)"}
+                                },
+                                "required": ["filename", "data"]
+                            }
+                        }
                     },
                     "required": ["to", "subject", "body"]
                 },
@@ -530,11 +597,12 @@ async def main():
                 subject = arguments.get("subject")
                 body = arguments.get("body")
                 html_body = arguments.get("html_body")
+                attachments = arguments.get("attachments")
                 
                 if not to or not subject or not body:
                     raise ValueError("Missing required parameters: to, subject, and body are required")
                 
-                results = gmail.send_email(to=to, subject=subject, body=body, html_body=html_body)
+                results = gmail.send_email(to=to, subject=subject, body=body, html_body=html_body, attachments=attachments)
                 return [types.TextContent(type="text", text=results)]
 
             else:
