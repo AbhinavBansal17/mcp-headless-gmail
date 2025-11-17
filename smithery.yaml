@@ -3,27 +3,15 @@
 startCommand:
   type: http
   commandFunction:
-    # A JS function that produces the CLI command based on the given config to start the MCP on HTTP.
+    # A JS function that produces the CLI command to start the MCP server on HTTP.
+    # Smithery will route MCP traffic to /mcp endpoint on the provided PORT.
     |-
     (config) => ({
       command: 'node',
-      args: ['server.js'],
-      env: { PORT: '8000' }
+      args: ['server.js']
     })
   configSchema:
     # JSON Schema defining the configuration options for the MCP.
     type: object
     properties: {}
   exampleConfig: {}
-
-# Test configuration for Smithery scanner
-testConfig:
-  tools:
-    gmail_get_recent_emails:
-      google_access_token: "test_token"
-      max_results: 5
-    gmail_send_email:
-      google_access_token: "test_token"
-      to: "test@example.com"
-      subject: "Test"
-      body: "Test message"

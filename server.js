@@ -399,27 +399,15 @@ async function main() {
         return;
       }
 
-      if (req.method === 'GET' && req.url === '/.well-known/mcp-config') {
-        logger.info('Received MCP config discovery request');
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          mcpServers: {
-            'gmail-client': {
-              url: '/sse'
-            }
-          }
-        }));
-        return;
-      }
-
-      if (req.method === 'POST' && (req.url === '/sse' || req.url === '/')) {
-        logger.info(`Received SSE connection request on ${req.url}`);
+      // Smithery routes MCP traffic to /mcp endpoint
+      if (req.method === 'POST' && (req.url === '/mcp' || req.url.startsWith('/mcp?'))) {
+        logger.info(`Received MCP connection request on ${req.url}`);
         try {
           const transport = new SSEServerTransport('/message', res);
           await server.connect(transport);
-          logger.info('SSE transport connected successfully');
+          logger.info('MCP transport connected successfully');
         } catch (error) {
-          logger.error(`Failed to connect SSE transport: ${error.message}`);
+          logger.error(`Failed to connect MCP transport: ${error.message}`);
           if (!res.headersSent) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: error.message }));
