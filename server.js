@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { createStatefulServer } from '@smithery/sdk/server/stateful.js';
 import { z } from 'zod';
-import http from 'http';
 import { google } from 'googleapis';
 import { Buffer } from 'buffer';
 import { DateTime } from 'luxon';
@@ -280,13 +280,13 @@ class GmailClient {
   }
 }
 
-async function main() {
-  logger.info('Starting Gmail MCP server');
-  try {
-    const server = new McpServer({
-      name: 'gmail-client',
-      version: '0.1.0'
-    });
+// Create the MCP server with all tools
+function createServer({ config } = {}) {
+  logger.info('Creating Gmail MCP server instance');
+  const server = new McpServer({
+    name: 'gmail-client',
+    version: '0.1.0'
+  });
 
     server.tool(
       'gmail_refresh_token',
@@ -379,73 +379,31 @@ async function main() {
       }
     );
 
-    // HTTP server setup for SSE transport
+  return server.server;
+}
+
+// Main function - sets up dual transport (stdio for local, HTTP for Smithery)
+async function main() {
+  logger.info('Starting Gmail MCP server with dual transport');
+
+  try {
+    // Stdio transport for local usage (Claude Desktop, npx, etc.)
+    logger.info('Setting up stdio transport for local usage');
+    const stdioServer = createServer({});
+    const stdioTransport = new StdioServerTransport();
+    await stdioServer.connect(stdioTransport);
+    logger.info('Stdio transport connected');
+
+    // HTTP transport for Smithery remote hosting
     const PORT = process.env.PORT || 8000;
-
-    const httpServer = http.createServer(async (req, res) => {
-      // Enable CORS
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-      if (req.method === 'OPTIONS') {
-        res.writeHead(200);
-        res.end();
-        return;
-      }
-
-      if (req.method === 'GET' && req.url === '/health') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'ok' }));
-        return;
-      }
-
-      // Configuration discovery endpoint
-      if (req.method === 'GET' && req.url === '/.well-known/mcp-config') {
-        logger.info('Received MCP config discovery request');
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          "$schema": "http://json-schema.org/draft-07/schema#",
-          "$id": `http://localhost:${PORT}/.well-known/mcp-config`,
-          "title": "Gmail MCP Server Configuration",
-          "description": "Configuration for Gmail MCP server",
-          "type": "object",
-          "properties": {},
-          "additionalProperties": false
-        }));
-        return;
-      }
-
-      // Smithery routes MCP traffic to /mcp endpoint
-      if (req.url === '/mcp' || req.url.startsWith('/mcp?')) {
-        logger.info(`Received MCP ${req.method} request on ${req.url}`);
-
-        try {
-          // Create a new transport for each connection
-          const transport = new SSEServerTransport('/mcp', res);
-          logger.info('Connecting MCP transport...');
-          await server.connect(transport);
-          logger.info('MCP transport connected and ready');
-        } catch (error) {
-          logger.error(`Failed to handle MCP request: ${error.message}`);
-          logger.error(error.stack);
-          if (!res.headersSent) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: error.message }));
-          }
-        }
-        return;
-      }
-
-      res.writeHead(404);
-      res.end('Not found');
-    });
-
-    httpServer.listen(PORT, '0.0.0.0', () => {
-      logger.info(`MCP server listening on 0.0.0.0:${PORT}`);
+    logger.info(`Setting up HTTP transport for Smithery on port ${PORT}`);
+    const { app } = createStatefulServer(createServer);
+    app.listen(PORT, '0.0.0.0', () => {
+      logger.info(`HTTP server listening on 0.0.0.0:${PORT} for Smithery`);
     });
   } catch (error) {
     logger.error(`Error starting server: ${error.message}`);
+    logger.error(error.stack);
     process.exit(1);
   }
 }

@@ -15,13 +15,14 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.4.1",
+    "@smithery/sdk": "^1.7.4",
     "googleapis": "^133.0.0",
     "luxon": "^3.4.4",
-    "zod": "^3.22.4",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "zod": "^3.22.4"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "license": "MIT"
-} 
+}
