@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { z } from 'zod';
+import http from 'http';
 import { google } from 'googleapis';
 import { Buffer } from 'buffer';
 import { DateTime } from 'luxon';
@@ -378,9 +379,26 @@ async function main() {
       }
     );
 
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
-    logger.info('MCP server started and ready to receive requests');
+    // HTTP server setup for SSE transport
+    const PORT = process.env.PORT || 8000;
+    const httpServer = http.createServer(async (req, res) => {
+      if (req.method === 'POST' && req.url === '/sse') {
+        logger.info('Received SSE connection request');
+        const transport = new SSEServerTransport('/message', res);
+        await server.connect(transport);
+        logger.info('SSE transport connected');
+      } else if (req.method === 'GET' && req.url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok' }));
+      } else {
+        res.writeHead(404);
+        res.end('Not found');
+      }
+    });
+
+    httpServer.listen(PORT, () => {
+      logger.info(`MCP server listening on port ${PORT}`);
+    });
   } catch (error) {
     logger.error(`Error starting server: ${error.message}`);
     process.exit(1);
