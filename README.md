@@ -1,6 +1,6 @@
 # MCP Headless Gmail Server (NPM & Docker)
 
-[![npm version](https://img.shields.io/npm/v/@peakmojo/mcp-server-headless-gmail.svg)](https://www.npmjs.com/package/@peakmojo/mcp-server-headless-gmail) [![Docker Pulls](https://img.shields.io/docker/pulls/buryhuang/mcp-headless-gmail)](https://hub.docker.com/r/buryhuang/mcp-headless-gmail) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![smithery badge](https://smithery.ai/badge/@AbhinavBansal17/mcp-headless-gmail)](https://smithery.ai/server/@AbhinavBansal17/mcp-headless-gmail) [![npm version](https://img.shields.io/npm/v/@peakmojo/mcp-server-headless-gmail.svg)](https://www.npmjs.com/package/@peakmojo/mcp-server-headless-gmail) [![Docker Pulls](https://img.shields.io/docker/pulls/buryhuang/mcp-headless-gmail)](https://hub.docker.com/r/buryhuang/mcp-headless-gmail) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A MCP (Model Context Protocol) server that provides get, send Gmails without local credential or token setup.
 
