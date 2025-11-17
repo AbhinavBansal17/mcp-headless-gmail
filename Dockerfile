@@ -5,13 +5,13 @@ FROM node:18-slim
 # Install the project into `/app`
 WORKDIR /app
 
-# Copy package files first for better caching
-COPY package*.json ./
+# Copy package.json
+COPY package.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install dependencies (use npm install since no package-lock.json)
+RUN npm install --production
 
-# Copy the rest of the application
+# Copy server code
 COPY server.js ./
 
 # Expose the port (Smithery will inject PORT env var)
