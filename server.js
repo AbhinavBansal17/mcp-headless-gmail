@@ -381,6 +381,7 @@ async function main() {
 
     // HTTP server setup for SSE transport
     const PORT = process.env.PORT || 8000;
+
     const httpServer = http.createServer(async (req, res) => {
       // Enable CORS
       res.setHeader('Access-Control-Allow-Origin', '*');
@@ -399,15 +400,35 @@ async function main() {
         return;
       }
 
+      // Configuration discovery endpoint
+      if (req.method === 'GET' && req.url === '/.well-known/mcp-config') {
+        logger.info('Received MCP config discovery request');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$id": `http://localhost:${PORT}/.well-known/mcp-config`,
+          "title": "Gmail MCP Server Configuration",
+          "description": "Configuration for Gmail MCP server",
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }));
+        return;
+      }
+
       // Smithery routes MCP traffic to /mcp endpoint
-      if (req.method === 'POST' && (req.url === '/mcp' || req.url.startsWith('/mcp?'))) {
-        logger.info(`Received MCP connection request on ${req.url}`);
+      if (req.url === '/mcp' || req.url.startsWith('/mcp?')) {
+        logger.info(`Received MCP ${req.method} request on ${req.url}`);
+
         try {
-          const transport = new SSEServerTransport('/message', res);
+          // Create a new transport for each connection
+          const transport = new SSEServerTransport('/mcp', res);
+          logger.info('Connecting MCP transport...');
           await server.connect(transport);
-          logger.info('MCP transport connected successfully');
+          logger.info('MCP transport connected and ready');
         } catch (error) {
-          logger.error(`Failed to connect MCP transport: ${error.message}`);
+          logger.error(`Failed to handle MCP request: ${error.message}`);
+          logger.error(error.stack);
           if (!res.headersSent) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: error.message }));
