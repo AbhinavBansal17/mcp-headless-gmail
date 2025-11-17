@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createStatefulServer } from '@smithery/sdk/server/stateful.js';
 import { z } from 'zod';
 import { google } from 'googleapis';
@@ -382,24 +381,21 @@ function createServer({ config } = {}) {
   return server.server;
 }
 
-// Main function - sets up dual transport (stdio for local, HTTP for Smithery)
+// Main function - HTTP transport only for Smithery deployment
 async function main() {
-  logger.info('Starting Gmail MCP server with dual transport');
+  logger.info('Starting Gmail MCP server with HTTP transport for Smithery');
 
   try {
-    // Stdio transport for local usage (Claude Desktop, npx, etc.)
-    logger.info('Setting up stdio transport for local usage');
-    const stdioServer = createServer({});
-    const stdioTransport = new StdioServerTransport();
-    await stdioServer.connect(stdioTransport);
-    logger.info('Stdio transport connected');
-
-    // HTTP transport for Smithery remote hosting
     const PORT = process.env.PORT || 8000;
-    logger.info(`Setting up HTTP transport for Smithery on port ${PORT}`);
+    logger.info(`Setting up HTTP transport on port ${PORT}`);
+
+    // Use Smithery SDK to create stateful HTTP server
     const { app } = createStatefulServer(createServer);
+
     app.listen(PORT, '0.0.0.0', () => {
-      logger.info(`HTTP server listening on 0.0.0.0:${PORT} for Smithery`);
+      logger.info(`HTTP server listening on 0.0.0.0:${PORT}`);
+      logger.info('Ready to accept MCP connections at /mcp');
+      logger.info('Config schema available at /.well-known/mcp-config');
     });
   } catch (error) {
     logger.error(`Error starting server: ${error.message}`);
