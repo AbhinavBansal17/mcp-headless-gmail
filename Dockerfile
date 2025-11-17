@@ -1,14 +1,7 @@
-# Use Python base image
-FROM python:3.11-slim
-
-# Install the project into `/app`
+FROM node:18-slim
 WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY server.js .
+ENTRYPOINT ["node", "server.js"]
 
-# Copy the entire project
-COPY . /app
-
-# Install the package
-RUN pip install --no-cache-dir -e .
-
-# Run the server
-ENTRYPOINT ["mcp-server-headless-gmail"] 
