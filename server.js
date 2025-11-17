@@ -382,22 +382,58 @@ async function main() {
     // HTTP server setup for SSE transport
     const PORT = process.env.PORT || 8000;
     const httpServer = http.createServer(async (req, res) => {
-      if (req.method === 'POST' && req.url === '/sse') {
-        logger.info('Received SSE connection request');
-        const transport = new SSEServerTransport('/message', res);
-        await server.connect(transport);
-        logger.info('SSE transport connected');
-      } else if (req.method === 'GET' && req.url === '/health') {
+      // Enable CORS
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+      if (req.method === 'OPTIONS') {
+        res.writeHead(200);
+        res.end();
+        return;
+      }
+
+      if (req.method === 'GET' && req.url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok' }));
-      } else {
-        res.writeHead(404);
-        res.end('Not found');
+        return;
       }
+
+      if (req.method === 'GET' && req.url === '/.well-known/mcp-config') {
+        logger.info('Received MCP config discovery request');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          mcpServers: {
+            'gmail-client': {
+              url: '/sse'
+            }
+          }
+        }));
+        return;
+      }
+
+      if (req.method === 'POST' && (req.url === '/sse' || req.url === '/')) {
+        logger.info(`Received SSE connection request on ${req.url}`);
+        try {
+          const transport = new SSEServerTransport('/message', res);
+          await server.connect(transport);
+          logger.info('SSE transport connected successfully');
+        } catch (error) {
+          logger.error(`Failed to connect SSE transport: ${error.message}`);
+          if (!res.headersSent) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message }));
+          }
+        }
+        return;
+      }
+
+      res.writeHead(404);
+      res.end('Not found');
     });
 
-    httpServer.listen(PORT, () => {
-      logger.info(`MCP server listening on port ${PORT}`);
+    httpServer.listen(PORT, '0.0.0.0', () => {
+      logger.info(`MCP server listening on 0.0.0.0:${PORT}`);
     });
   } catch (error) {
     logger.error(`Error starting server: ${error.message}`);
